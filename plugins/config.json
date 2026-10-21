@@ -35,6 +35,22 @@
         {
             "name": "Debug",
             "color": "#EA8326"
+        },
+        {
+            "name": "USB",
+            "color": "#3B4CCA"
+        },
+        {
+            "name": "CAN",
+            "color": "#17A398"
+        },
+        {
+            "name": "Clock",
+            "color": "#D4A017"
+        },
+        {
+            "name": "NC",
+            "color": "#9AA5B1"
         }
     ]
 }

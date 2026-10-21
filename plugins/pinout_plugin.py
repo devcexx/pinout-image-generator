@@ -99,6 +99,7 @@ class PinoutPlugin(pcbnew.ActionPlugin if pcbnew else object):
             dlg.Destroy()
             return
         final_pins, size, out_path = dlg.collect(color_map)
+        label_orientation = dlg.get_label_orientation()
         dlg.Destroy()
 
         if not final_pins:
@@ -110,7 +111,8 @@ class PinoutPlugin(pcbnew.ActionPlugin if pcbnew else object):
                           wx.OK | wx.ICON_WARNING)
             return
 
-        render_pinout(final_pins, board_image, size, out_path)
+        render_pinout(final_pins, board_image, size, out_path,
+                      label_orientation=label_orientation)
 
         if wx.MessageBox(f'Generated:\n{out_path}\n\nOpen in browser?',
                          'Pinout Image Generator', wx.YES_NO | wx.ICON_INFORMATION) == wx.YES:

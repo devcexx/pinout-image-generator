@@ -63,6 +63,9 @@ Available function types are defined in config.json (Power, Ground, UART, etc.).
                         help='DPI for the PNG export (default: %(default)s)')
     parser.add_argument('--no-sort-pins', action='store_true',
                         help='Disable spatial sorting of detected pins')
+    parser.add_argument('--label-orientation', choices=LABEL_ORIENTATIONS, default='auto',
+                        help='Orientation of top/bottom function labels; "auto" rotates them '
+                             'only when neighbouring labels would overlap (default: %(default)s)')
     return parser.parse_args()
 
 
@@ -134,7 +137,7 @@ def generate_template_csv(pins, output_path='pins_template.csv', config=None):
 
 
 def build_pinout(input_svg, board_image, output_file, pins_data,
-                 export_png=True, png_dpi=300, sort_pins=True):
+                 export_png=True, png_dpi=300, sort_pins=True, label_orientation='auto'):
     """Core rendering logic, shared between CLI and GUI."""
     tree = ET.parse(input_svg)
     root = tree.getroot()
@@ -162,7 +165,9 @@ def build_pinout(input_svg, board_image, output_file, pins_data,
         else:
             pin.add_function(f'pin_{pin.number}', '#888888')
 
-        add_pin_graphics(root, pin)
+    vertical_sides = resolve_vertical_sides(pin_detected, label_orientation)
+    for pin in pin_detected:
+        add_pin_graphics(root, pin, vertical=pin.side in vertical_sides)
 
     if board_image and os.path.isfile(board_image):
         add_board_image(root, board_image, svg_width, svg_height)
@@ -216,7 +221,8 @@ def main():
         print(f"Loaded pin data for {len(pins_data)} pins from {args.pins}")
 
     build_pinout(args.input_svg, args.board_image, args.output, pins_data,
-                 export_png=not args.no_png, png_dpi=args.png_dpi, sort_pins=sort_pins)
+                 export_png=not args.no_png, png_dpi=args.png_dpi, sort_pins=sort_pins,
+                 label_orientation=args.label_orientation)
 
 
 if __name__ == '__main__':

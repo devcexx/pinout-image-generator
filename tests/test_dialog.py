@@ -106,6 +106,33 @@ class TestDialogModule(unittest.TestCase):
         self.assertEqual(exported['pins'][0]['label'], 'VCC')
         self.assertEqual(exported['pins'][0]['pad_name'], '1')
         self.assertEqual(exported['pins'][0]['footprint'], 'J1')
+        # No orientation control on the mock dialog -> default mode
+        self.assertEqual(exported['label_orientation'], 'auto')
+
+    def test_dialog_label_orientation_round_trip(self):
+        class MockChoice:
+            def __init__(self):
+                self.sel = 0
+
+            def GetSelection(self):
+                return self.sel
+
+            def SetSelection(self, sel):
+                self.sel = sel
+
+        dlg = object.__new__(PinoutDialog)
+        dlg.out_ctrl = MockTextCtrl("")
+        dlg.orient_choice = MockChoice()
+        dlg._meta = {}
+        dlg.grid = MockGrid([])
+
+        PinoutDialog.apply_config_dict(dlg, {'pins': [], 'label_orientation': 'vertical'})
+        self.assertEqual(PinoutDialog.get_label_orientation(dlg), 'vertical')
+        self.assertEqual(PinoutDialog.export_config_dict(dlg)['label_orientation'], 'vertical')
+
+        # Unknown values from a hand-edited config are ignored
+        PinoutDialog.apply_config_dict(dlg, {'pins': [], 'label_orientation': 'diagonal'})
+        self.assertEqual(PinoutDialog.get_label_orientation(dlg), 'vertical')
 
 
 if __name__ == '__main__':

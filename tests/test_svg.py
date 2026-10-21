@@ -65,6 +65,13 @@ class TestSvgModule(unittest.TestCase):
         self.assertAlmostEqual(float(rect.attrib['x']), 12.0)
         self.assertAlmostEqual(float(rect.attrib['y']), 23.0)
 
+    def test_shift_element_moves_rotation_centre(self):
+        text = ET.Element('text', {'x': '10', 'y': '20', 'transform': 'rotate(-90 10 20)'})
+        svg.shift_element(text, 5, -5)
+        self.assertAlmostEqual(float(text.attrib['x']), 15.0)
+        self.assertAlmostEqual(float(text.attrib['y']), 15.0)
+        self.assertEqual(text.attrib['transform'], 'rotate(-90 15.0 15.0)')
+
     def test_update_bounding_box(self):
         root = ET.Element('{http://www.w3.org/2000/svg}svg')
         ET.SubElement(root, '{http://www.w3.org/2000/svg}circle', {'cx': '10', 'cy': '20', 'r': '5'})

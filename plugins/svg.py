@@ -285,6 +285,14 @@ def shift_element(element, dx, dy):
     elif element.tag.endswith('text') or element.tag.endswith('image'):
         element.attrib['x'] = str(float(element.attrib['x']) + dx)
         element.attrib['y'] = str(float(element.attrib['y']) + dy)
+        transform = element.attrib.get('transform')
+        if transform:
+            match = re.match(r'\s*rotate\(\s*([-\d.eE]+)[ ,]+([-\d.eE]+)[ ,]+([-\d.eE]+)\s*\)\s*$', transform)
+            if match:
+                angle, cx, cy = match.groups()
+                new_cx = float(cx) + dx
+                new_cy = float(cy) + dy
+                element.attrib['transform'] = f'rotate({angle} {new_cx} {new_cy})'
 
     return element
 

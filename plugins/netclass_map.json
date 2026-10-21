@@ -19,6 +19,11 @@
     { "pattern": "^(AIN|AN)\\d+.*",  "function": "ADC"            },
     { "pattern": "^(SWD|SWCLK|SWDIO|TDI|TDO|TCK|TMS|TRST)\\b.*", "function": "Debug" },
     { "pattern": "^(RESET|NRST|EN|ENABLE|BOOT)\\b.*", "function": "System Control" },
+    { "pattern": "^USB.*",           "function": "USB"            },
+    { "pattern": "^(D[+-]|DP|DM)$",  "function": "USB"            },
+    { "pattern": "^CAN.*",           "function": "CAN"            },
+    { "pattern": "^(CLK|XTAL|OSC|MCO).*", "function": "Clock"     },
+    { "pattern": "^(NC$|unconnected-)", "function": "NC"          },
     { "pattern": "^(GPIO|PWM|IO)\\d*.*", "function": "GPIO/PWM"   }
   ]
 }
