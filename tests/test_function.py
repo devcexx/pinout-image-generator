@@ -17,9 +17,12 @@ from function import (
     detect_side_pin,
     read_image,
     render_pinout,
+    resolve_vertical_sides,
     scale_image_to_svg,
     svg_to_png,
+    vertical_label_sides,
 )
+import svg
 from Pin import Pin
 
 
@@ -103,6 +106,51 @@ class TestFunctionModule(unittest.TestCase):
         # Group count should be 4
         groups = [el for el in root.iter() if el.tag.endswith('g') and 'id' in el.attrib and 'functions' not in el.attrib['id']]
         self.assertEqual(len(groups), 4)
+
+    @staticmethod
+    def _header_row(side, pitch, names):
+        pins = []
+        for i, name in enumerate(names):
+            pin = Pin(cx=10 + i * pitch, cy=0, r=0.85, number=i + 1, side=side)
+            pin.add_function(name, "#439ED6")
+            pins.append(pin)
+        return pins
+
+    def test_vertical_label_sides(self):
+        # 2.54 mm pitch: horizontal boxes (>= 10 mm wide) overlap -> rotate
+        tight = self._header_row('top', 2.54, ['SDA', 'SCL', 'GND'])
+        # 15 mm pitch: enough room for horizontal boxes
+        wide = self._header_row('bottom', 15.0, ['SDA', 'SCL', 'GND'])
+        # Left/right are never rotated, however tight
+        side = self._header_row('left', 2.54, ['SDA', 'SCL'])
+        self.assertEqual(vertical_label_sides(tight + wide + side), {'top'})
+
+    def test_resolve_vertical_sides_modes(self):
+        wide = self._header_row('top', 15.0, ['SDA', 'SCL'])
+        self.assertEqual(resolve_vertical_sides(wide, 'auto'), set())
+        self.assertEqual(resolve_vertical_sides(wide, 'vertical'), {'top', 'bottom'})
+        tight = self._header_row('top', 2.54, ['SDA', 'SCL'])
+        self.assertEqual(resolve_vertical_sides(tight, 'horizontal'), set())
+
+    def test_add_pin_graphics_vertical_box_fits_label(self):
+        root = create_svg_root(100, 100)
+        pin = Pin(cx=50, cy=10, r=0.85, number=1, side='top')
+        pin.add_function("PWM", "#7AC943")
+        add_pin_graphics(root, pin, vertical=True)
+
+        texts = [el for el in root.iter() if el.tag.endswith('text') and el.text == 'PWM']
+        self.assertEqual(len(texts), 1)
+        self.assertTrue(texts[0].attrib['transform'].startswith('rotate(-90'))
+
+        # Short labels get a short box rather than the 10 mm horizontal minimum
+        box = [el for el in root.iter() if el.tag.endswith('path') and el.attrib.get('fill') == '#7AC943'][0]
+        _, _, min_y, max_y = svg.get_min_max_pos(box)
+        self.assertLess(max_y - min_y, 5.0)
+
+        # Horizontal mode keeps the label unrotated
+        root = create_svg_root(100, 100)
+        add_pin_graphics(root, pin)
+        self.assertFalse(any('transform' in el.attrib for el in root.iter() if el.tag.endswith('text')))
 
     def test_autocrop_transparent(self):
         # Create an RGBA image with transparent margins

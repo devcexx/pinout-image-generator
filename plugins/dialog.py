@@ -26,6 +26,7 @@ except ImportError:
 import board_parser
 import save as save_mod
 from Pin import Pin
+from function import LABEL_ORIENTATIONS
 
 
 COLS = ('#', 'X (mm)', 'Y (mm)', 'Side', 'Label', 'Function', 'Show')
@@ -138,6 +139,16 @@ class PinoutDialog(wx.Dialog if wx else object):
         out_row.Add(self.out_ctrl, 1, wx.EXPAND | wx.RIGHT, 4)
         out_row.Add(browse_btn, 0)
         sizer.Add(out_row, 0, wx.EXPAND | wx.ALL, 6)
+
+        # ── Top / bottom label orientation ────────────────────────────────────
+        orient_row = wx.BoxSizer(wx.HORIZONTAL)
+        orient_row.Add(wx.StaticText(panel, label='Top/bottom labels:'),
+                       0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
+        self.orient_choice = wx.Choice(panel, choices=[
+            'Auto (rotate only if labels overlap)', 'Horizontal', 'Vertical (rotated 90°)'])
+        self.orient_choice.SetSelection(0)
+        orient_row.Add(self.orient_choice, 0)
+        sizer.Add(orient_row, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
 
         # ── OK / Cancel ───────────────────────────────────────────────────────
         btn_row = wx.BoxSizer(wx.HORIZONTAL)
@@ -280,8 +291,16 @@ class PinoutDialog(wx.Dialog if wx else object):
             'version':            '1.0',
             'selected_footprint': sel_fp,
             'output_path':        self.out_ctrl.GetValue().strip(),
+            'label_orientation':  self.get_label_orientation(),
             'pins':               pins_data,
         }
+
+    def get_label_orientation(self):
+        """Return the selected top/bottom label orientation (one of LABEL_ORIENTATIONS)."""
+        choice = getattr(self, 'orient_choice', None)
+        if choice is None or not 0 <= choice.GetSelection() < len(LABEL_ORIENTATIONS):
+            return 'auto'
+        return LABEL_ORIENTATIONS[choice.GetSelection()]
 
     def apply_config_dict(self, cfg):
         """Apply a saved configuration dictionary to the dialog controls and grid."""
@@ -302,6 +321,10 @@ class PinoutDialog(wx.Dialog if wx else object):
         # Restore output path
         if cfg.get('output_path'):
             self.out_ctrl.SetValue(cfg['output_path'])
+
+        # Restore label orientation
+        if cfg.get('label_orientation') in LABEL_ORIENTATIONS and hasattr(self, 'orient_choice'):
+            self.orient_choice.SetSelection(LABEL_ORIENTATIONS.index(cfg['label_orientation']))
 
         saved_pins = cfg.get('pins', [])
         if not saved_pins:

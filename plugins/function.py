@@ -25,6 +25,10 @@ SVG_TAG = lambda name: f'{{{SVG_NS}}}{name}'
 ET.register_namespace('', SVG_NS)
 ET.register_namespace('xlink', XLINK_NS)
 
+# Top/bottom label orientation modes: 'auto' rotates a side only when its
+# horizontal labels would overlap.
+LABEL_ORIENTATIONS = ('auto', 'horizontal', 'vertical')
+
 
 def detect_side_pin(cx, cy, svg_size):
     """Detect which side of the board a pin is closest to: 'left', 'right', 'top', or 'bottom'."""
@@ -115,10 +119,52 @@ def detect_pin(elements, svg_size, sort_pins=True):
     return sorted_pins
 
 
-def add_pin_graphics(svg_root, pin):
+def _box_length(func_name):
+    """Length (mm) of a horizontal function box, sized from its label."""
+    return max(10.0, len(func_name) * 0.75 + 3.5)
+
+
+def _vertical_box_length(func_name, font_size):
+    """Length (mm) of a vertical function box, sized from its rotated label."""
+    # Consolas advance is ~0.55 em; 0.6 leaves some slack for bold glyphs.
+    return max(4.0, len(func_name) * font_size * 0.6 + 1.5)
+
+
+def vertical_label_sides(pins, gap=0.5):
+    """Return the set of 'top'/'bottom' sides whose horizontal labels would overlap.
+
+    Boxes are centred on their pin, so two neighbouring pins clash when their
+    spacing is smaller than half the sum of their widest boxes (plus `gap`).
+    """
+    sides = set()
+    for side in ('top', 'bottom'):
+        row = sorted(
+            (p for p in pins
+             if getattr(p, 'displayed', True) and p.functions and (p.side or '').lower() == side),
+            key=lambda p: p.cx,
+        )
+        widths = [max(_box_length(str(f.get('name', ''))) for f in p.functions) for p in row]
+        for i in range(len(row) - 1):
+            if row[i + 1].cx - row[i].cx < (widths[i] + widths[i + 1]) / 2 + gap:
+                sides.add(side)
+                break
+    return sides
+
+
+def resolve_vertical_sides(pins, label_orientation='auto'):
+    """Return the sides to draw with vertical labels for a LABEL_ORIENTATIONS mode."""
+    if label_orientation == 'vertical':
+        return {'top', 'bottom'}
+    if label_orientation == 'horizontal':
+        return set()
+    return vertical_label_sides(pins)
+
+
+def add_pin_graphics(svg_root, pin, vertical=False):
     """Render a single pin's leader line, number badge, and function boxes into svg_root.
-    
+
     Supports 'left', 'right', 'top', and 'bottom' side orientations with dynamic box sizing.
+    `vertical` draws top/bottom function boxes rotated 90° (ignored for left/right).
     """
     line_length = 3.0
     stroke_width = 0.05
@@ -176,7 +222,7 @@ def add_pin_graphics(svg_root, pin):
         for func in pin.functions:
             func_name = str(func.get('name', ''))
             func_color = str(func.get('color', '#888888'))
-            box_l = max(10.0, len(func_name) * 0.75 + 3.5)
+            box_l = _box_length(func_name)
             slope = 0.1
 
             # Inter-box connector line
@@ -275,14 +321,22 @@ def add_pin_graphics(svg_root, pin):
         pin_text.text = str(pin.number)
         group.append(pin_text)
 
-        # Function boxes chained vertically
+        # Function boxes chained vertically. By default each box is wide and
+        # flat, centred on pin.cx. When `vertical` is set (closely spaced
+        # pins, see vertical_label_sides) the box is drawn narrow and long
+        # along the leader instead, with the label rotated 90°.
         el_functions = ET.Element(SVG_TAG('g'), {'id': f"g_pin_{pin.number}_functions"})
         curr_y = pin.cy + v * line_length + v * 2 * r
 
         for func in pin.functions:
             func_name = str(func.get('name', ''))
             func_color = str(func.get('color', '#888888'))
-            box_l = max(10.0, len(func_name) * 0.75 + 3.5)
+            if vertical:
+                box_w = box_h
+                box_len = _vertical_box_length(func_name, func_font_size)
+            else:
+                box_w = _box_length(func_name)
+                box_len = box_h
 
             # Inter-box connector line
             el_functions.append(ET.Element(SVG_TAG('path'), {
@@ -293,22 +347,17 @@ def add_pin_graphics(svg_root, pin):
             }))
             curr_y += v * line_length
 
-            # Horizontal rounded box centered on pin.cx
-            if v == -1:  # top side (expanding upwards)
-                init_x = pin.cx - box_l / 2
-                init_y = curr_y - box_h
-                text_cy = curr_y - box_h / 2
-            else:       # bottom side (expanding downwards)
-                init_x = pin.cx - box_l / 2
-                init_y = curr_y
-                text_cy = curr_y + box_h / 2
+            # Rounded box centered on pin.cx, expanding upwards (top) or downwards (bottom)
+            init_x = pin.cx - box_w / 2
+            init_y = curr_y - box_len if v == -1 else curr_y
+            text_cy = curr_y + v * box_len / 2
 
             poly_d = (
                 f"M {init_x},{init_y} "
-                f"l {box_l},0 "
-                f"l 0,{box_h} "
-                f"l {-box_l},0 "
-                f"l 0,{-box_h} Z"
+                f"l {box_w},0 "
+                f"l 0,{box_len} "
+                f"l {-box_w},0 "
+                f"l 0,{-box_len} Z"
             )
             rounded_d = svg.round_path_corners(poly_d, 0.3)
             el_functions.append(ET.Element(SVG_TAG('path'), {
@@ -318,7 +367,7 @@ def add_pin_graphics(svg_root, pin):
                 'stroke-width': str(stroke_width * 2)
             }))
 
-            # Function text
+            # Function text (rotated to read bottom-to-top in vertical mode)
             box_text = ET.Element(SVG_TAG('text'), {
                 'x': str(pin.cx),
                 'y': str(text_cy),
@@ -329,10 +378,12 @@ def add_pin_graphics(svg_root, pin):
                 'stroke': '#FFFFFF',
                 'stroke-width': str(stroke_width / 2)
             })
+            if vertical:
+                box_text.attrib['transform'] = f'rotate(-90 {pin.cx} {text_cy})'
             box_text.text = func_name
             el_functions.append(box_text)
 
-            curr_y += v * box_h
+            curr_y += v * box_len
 
         group.append(el_functions)
 
@@ -446,14 +497,15 @@ def create_svg_root(width_mm, height_mm):
 
 
 def render_pinout(pins, board_image_path, svg_size_mm, output_path,
-                  export_png=True, png_dpi=300):
+                  export_png=True, png_dpi=300, label_orientation='auto'):
     """Render an annotated pinout SVG from a list of Pin objects."""
     width, height = svg_size_mm
     root = create_svg_root(width, height)
 
+    vertical_sides = resolve_vertical_sides(pins, label_orientation)
     for pin in pins:
         if getattr(pin, 'displayed', True):
-            add_pin_graphics(root, pin)
+            add_pin_graphics(root, pin, vertical=(pin.side or '').lower() in vertical_sides)
 
     if board_image_path and os.path.isfile(board_image_path):
         add_board_image(root, board_image_path, width, height)
